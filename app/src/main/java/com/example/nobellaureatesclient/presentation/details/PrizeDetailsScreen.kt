@@ -3,19 +3,17 @@ package com.example.nobellaureatesclient.presentation.details
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,12 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import com.example.nobellaureatesclient.domain.model.Laureate
 import com.example.nobellaureatesclient.domain.model.NobelPrize
 import com.example.nobellaureatesclient.presentation.common.UiState
@@ -44,9 +40,13 @@ import com.example.nobellaureatesclient.presentation.common.UiState
 @Composable
 fun PrizeDetailsScreen(
     onBack: () -> Unit,
-    viewModel: PrizeDetailsViewModel = hiltViewModel()
+    viewModel: PrizeDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+
+    val currentPrize = (state as? UiState.Success)?.data
+    val isFavorite = currentPrize?.id?.let { it in favoriteIds } == true
 
     Scaffold(
         topBar = {
@@ -56,29 +56,40 @@ fun PrizeDetailsScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
-                }
+                },
+                actions = {
+                    if (currentPrize != null) {
+                        IconButton(onClick = viewModel::toggleFavorite) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Убрать из избранного" else "В избранное",
+                                tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
             )
-        }
+        },
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
         ) {
             when (val s = state) {
                 is UiState.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
 
                 is UiState.Error -> Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Ошибка: ${s.message}",
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
                         )
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = viewModel::retry) { Text("Повторить") }
@@ -98,25 +109,35 @@ private fun PrizeContent(prize: NobelPrize) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "${prize.awardYear} · ${prize.categoryFullName.ifBlank { prize.category.displayName }}",
+            text = "${prize.year} · ${prize.category.displayName}",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
-        prize.dateAwarded?.let {
-            Text(text = "Дата награждения: $it", style = MaterialTheme.typography.bodyMedium)
-        }
-        prize.prizeAmount?.let {
-            Text(text = "Сумма премии: $it SEK", style = MaterialTheme.typography.bodyMedium)
+        prize.motivation?.takeIf { it.isNotBlank() }?.let {
+            Text(text = it, style = MaterialTheme.typography.bodyLarge)
         }
 
         HorizontalDivider()
 
-        prize.laureates.forEach { laureate ->
-            LaureateBlock(laureate = laureate)
-            HorizontalDivider()
+        Text(
+            text = "Лауреаты",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+
+        if (prize.laureates.isEmpty()) {
+            Text(
+                text = "Лауреаты не указаны",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            prize.laureates.forEach { laureate ->
+                LaureateBlock(laureate = laureate)
+                HorizontalDivider()
+            }
         }
     }
 }
@@ -125,48 +146,28 @@ private fun PrizeContent(prize: NobelPrize) {
 private fun LaureateBlock(laureate: Laureate) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (!laureate.portraitUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = laureate.portraitUrl,
-                    contentDescription = laureate.fullName,
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                )
-                Spacer(Modifier.width(16.dp))
-            }
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = laureate.fullName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                laureate.country?.let {
-                    Text(text = "Страна: $it", style = MaterialTheme.typography.bodyMedium)
-                }
-                val years = buildString {
-                    laureate.birthDate?.let { append("род. $it") }
-                    laureate.deathDate?.let {
-                        if (isNotEmpty()) append(" · ")
-                        append("ум. $it")
-                    }
-                }
-                if (years.isNotBlank()) {
-                    Text(text = years, style = MaterialTheme.typography.bodySmall)
-                }
+        Text(
+            text = laureate.fullName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        val years = buildString {
+            laureate.birthDate?.let { append("род. $it") }
+            laureate.deathDate?.let {
+                if (isNotEmpty()) append(" · ")
+                append("ум. $it")
             }
         }
-        if (laureate.motivation.isNotBlank()) {
-            Text(
-                text = laureate.motivation,
-                style = MaterialTheme.typography.bodyLarge
-            )
+        if (years.isNotBlank()) {
+            Text(text = years, style = MaterialTheme.typography.bodySmall)
+        }
+        laureate.affiliation?.takeIf { it.isNotBlank() }?.let {
+            Text(text = "Аффилиация: $it", style = MaterialTheme.typography.bodyMedium)
+        }
+        laureate.share?.let {
+            Text(text = "Доля: 1/$it", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

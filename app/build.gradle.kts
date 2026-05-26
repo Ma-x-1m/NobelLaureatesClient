@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Адрес Ktor-сервера. На реальном устройстве 10.0.2.2/localhost не работают —
+// используется IP компьютера в локальной сети. Можно переопределить из gradle.properties:
+// nobel.server.url=http://192.168.1.50:8080
+val serverBaseUrl: String =
+    (project.findProperty("nobel.server.url") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: "http://192.168.1.100:8080"
+
 android {
     namespace = "com.example.nobellaureatesclient"
     compileSdk = 36
@@ -19,6 +26,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
 
     buildTypes {
@@ -39,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -54,7 +64,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -65,6 +77,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.auth)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
